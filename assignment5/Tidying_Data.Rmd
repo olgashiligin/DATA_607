@@ -1,0 +1,121 @@
+---
+title: "Tidying and Transforming Data"
+author: "Olga Shiligin"
+date: "29/09/2018"
+output: html_document
+---
+
+Installing necessary packages
+```{r}
+# install.packages("tidyr")
+# install.packages("dplyr")
+# install.packages("ggplot2")
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+
+```
+
+Reading data from csv file:
+---------------------------
+```{r}
+data<- read.csv("https://raw.githubusercontent.com/olgashiligin/Tidying_and_Transforming/master/delays.csv",sep=",")
+data
+
+```
+Tidying Data:
+---------------
+1. Removing one empty row
+2. Renaming first two columns
+3. Replacing empty spaces with Airlines names
+
+
+ Removing one empty row
+
+```{r}
+data<-data[-c(3), ] 
+data
+```
+
+
+  Renaming first two columns
+
+```{r}
+names(data) <- c('Airlines', 'Status', 'Los Angeles', 'Phoenix', 'San Diego','San Francisco', names(data)[7])
+data
+```
+
+ Replacing empty spaces with Airlines names
+
+```{r}
+for (i in 1:nrow(data)) {
+  if (data[i, 1] == " ") {
+    data[i, 1] = data[i - 1, 1]
+  }
+}
+
+data
+
+```
+Prepairing data set for the analysis:
+--------------------------------------
+1. Transforming wide table format
+2. Splitting "Status" column into two columns: delayed and on_time.
+
+
+ Transforming wide table format
+
+```{r}
+data<-gather(data,Destinations,Number_of_Flights,3:7)
+data
+```
+
+ Splitting "Status" column into two columns: delayed and on_time. Renaming on time column.
+
+```{r}
+data <- spread(data, Status, Number_of_Flights)
+names(data)[names(data) == "on time"] <- "on_time"
+data
+```
+
+ Performing analysis on flight delays by ALASKA and AM WEST airlines. 
+---------------------------------------------------------------------
+ Calculating percentage of flight delays by airlines. 
+
+```{r}
+overall_analysis<-data %>% 
+   mutate(total_flights = delayed + on_time) %>%
+    group_by(Airlines) %>% 
+     summarise(avg_delayed_rate = sum(delayed)/sum(total_flights))
+
+overall_analysis
+
+```
+Overall analysis shows that Alaska airlines has higer rate of delays (0.133) compare to  AM WEST (0.109)
+
+```{r}
+analysis<-data %>%
+  mutate(total_flights = delayed + on_time, delayed_rate = delayed/(delayed+on_time)) %>%
+  arrange(desc(delayed_rate))
+
+analysis
+```
+
+
+ 
+```{r}
+viz3<-ggplot(analysis, aes(x = Destinations, y = delayed_rate, fill = Airlines)) + geom_col( position = "dodge") + ylab("Delayed Flights, %")+ggtitle("           Flight Delays By Airlines and By Destinations")
+viz3
+
+```
+
+AM WEST: the highest rate of delays - San Francisco (0.28), the lowest rate of delays - Phoenix (0.79)
+
+Alaska: the highest rate of delays - San Francisco (0.17), the lowest rate of delays - Phoenix (0.05)
+
+
+
+
+
+
