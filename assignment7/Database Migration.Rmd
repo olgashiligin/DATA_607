@@ -1,0 +1,110 @@
+---
+title: "Assignment 12"
+author: "Olga Shiligin"
+date: "25/11/2018"
+output: html_document
+---
+
+For this assignment, you should take information from a relational database and migrate it to a NoSQL database of your own choosing. 
+
+For the relational database, you might use the flights database, the tb database, the "data skills" database your team created for Project 3, or another database of your own choosing or creation.
+
+For the NoSQL database, you may use MongoDB (which we introduced in week 7), Neo4j, or another NoSQL database of your choosing.
+
+Your migration process needs to be reproducible.  R code is encouraged, but not required.  You should also briefly describe the advantages and disadvantages of storing the data in a relational database vs. your NoSQL database.
+
+
+
+
+Assumption: in MySQL "ASSIGNMENT12" database exists.
+
+Loading necessary packages
+
+```{r}
+library(nycflights13)
+library("RMySQL")
+library(DBI)
+library("mongolite")
+```
+
+Variables declaration
+
+```{r}
+airlines.table.name <- "AIRLINES"
+mysql.db.name <- "ASSIGNMENT12"
+mysql.password <- "olga123"
+mysql.user.name <- "root"
+local.host="localhost"
+mongo.url = sprintf("mongodb://%s", local.host )
+```
+
+Initialise connection to MySQl 
+
+```{r}
+mysql.connection <- dbConnect(MySQL(),
+                        user=mysql.user.name, password=mysql.password,
+                        dbname=mysql.db.name, host=local.host)
+```
+
+Initialise connection to MongoDB 
+
+```{r}
+mongo.connection <- mongo(airlines.table.name,url = mongo.url) 
+```
+
+Insert Airlines table to MySQL
+
+```{r}
+dbWriteTable(mysql.connection,airlines.table.name,airlines, overwrite = TRUE)
+```
+
+Read data from Airlines table into a dataframe and close connection.
+
+```{r}
+sql.df <- dbReadTable(mysql.connection, airlines.table.name)
+dbDisconnect(mysql.connection)
+```
+
+Printing dataframe 
+
+```{r}
+sql.df
+```
+
+Insert dataframe into MongoDB and read the data frame.
+
+```{r}
+mongo.connection$insert(sql.df)
+mongo.df <- mongo.connection$find('{}')
+mongo.connection$disconnect()
+```
+
+Printing dataframe 
+
+```{r}
+mongo.df
+```
+
+
+ MySQL VS MongoDB
+-----------------
+
+
+MySQl:
+
+- atomic transaction support
+- JOIN support
+
+MongoDB:
+
+- easier to maintain
+- faster than relational databases
+- scalable
+- schema-less (flexible)
+
+
+
+ 
+ 
+ 
+ 
