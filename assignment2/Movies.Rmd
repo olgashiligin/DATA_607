@@ -1,0 +1,72 @@
+---
+title: "Movies"
+author: "Olga Shiligin"
+date: "07/09/2018"
+output: html_document
+---
+
+Choose six recent popular movies.  Ask at least five people that you know (friends, family, classmates, imaginary friends) to rate each of these movie that they have seen on a scale of 1 to 5.  Take the results (observations) and store them in a SQL database.  Load the information into an R dataframe.
+Your deliverables should include your SQL scripts and your R Markdown code, posted to GitHub.
+
+
+Installing RMySQL, DBI, connecting to MySql Database
+
+```{r}
+# install.packages("RMySQL")
+# install.packages("DBI")
+library(RMySQL)
+
+conbection <- dbConnect(MySQL(),
+                 user="root", password="olga123",
+                 dbname="607_assignments", host="localhost")
+```
+
+
+```{r}
+results <- "SELECT * from movies"
+results <- dbGetQuery(conbection, results)
+results
+```
+
+Selecting movie with the highest rating
+
+```{r}
+best_movie <- "SELECT Movie, avg(Rating) from movies group by Movie order by avg(Rating) desc"
+best_movie <- dbGetQuery(conbection, best_movie)
+best_movie
+
+```
+Selecting person who loves the selected movies most.
+
+```{r}
+person <- "SELECT Name, avg(Rating) from movies group by Name order by avg(Rating) desc"
+person <- dbGetQuery(conbection, person)
+person
+
+```
+Creating R dataframe.
+
+```{r}
+
+df<-data.frame(results)
+head(df)
+
+```
+
+Disconnecting from database.
+
+```{r}
+dbDisconnect(conbection)
+
+```
+
+
+
+
+
+
+
+
+
+
+
