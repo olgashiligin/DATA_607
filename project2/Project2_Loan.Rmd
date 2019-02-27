@@ -1,0 +1,67 @@
+---
+title: "Project2_Loan"
+author: "Olga Shiligin"
+date: "07/10/2018"
+output: html_document
+---
+
+Data set  - loan data (modified by me)
+
+Loading necessary libraries
+
+```{r}
+library(tidyr)
+library(dplyr)
+library(tidyverse)
+```
+
+Reading csv file
+
+```{r}
+loan <- read_csv("https://raw.githubusercontent.com/olgashiligin/project2_607/master/loan.csv")
+loan
+```
+
+Cleaning date
+
+```{r}
+clean_date<-loan %>% 
+  separate(date,c("Year","Month","Day"),sep=" |/|\\.|-|\\,") %>% 
+  unite("new_date",Year, Month, Day, sep="/")
+
+clean_date
+
+```
+
+Analysis (loan percentage by gender and by country)
+
+```{r}
+analysis<-clean_date %>% 
+  group_by(country, gender) %>% 
+  summarise(total_loan_amount =sum(loan_amount)) %>% 
+  spread(gender, total_loan_amount) %>% 
+  ungroup() %>%
+  transmute(country = country,  female_percent = F / (F+M), male_percent = M /(F+M))
+
+analysis
+
+```
+
+Male percentage of total loan amount for France is equal to female percentage of total loan amount. Whereas in Italy and Russian male percentage of loan amount is significantly greater than female percentage of total loan amount (0.82 and 0.18 respectively).
+
+
+What month is the most "busy" in giving loans?
+
+```{r}
+busy_month<-clean_date %>% 
+  separate(new_date,c("Year","Month","Day"),sep="/") %>% 
+  group_by(Month) %>% 
+  count(country) %>% 
+  summarise(sum_count= sum(n)) %>% 
+  arrange(desc(sum_count))
+  
+busy_month
+
+```
+
+The most "busy" month is June.
