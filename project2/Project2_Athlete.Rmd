@@ -1,0 +1,126 @@
+---
+title: "Project2_Athletes"
+author: "Olga Shiligin"
+date: "07/10/2018"
+output: html_document
+---
+
+Data Source: https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results
+
+Data Set:“120 years of Olympic history: athletes and results”. Basic bio data on athletes and medal results from Athens 1896 to Rio 2016.
+
+1. Installing necessary packages
+
+```{r}
+# install.packages("tidyr")
+# install.packages("dplyr")
+# install.packages("ggplot2")
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+```
+
+2. Reading csv file (file is too big for placing it on GitHub)
+
+```{r}
+athletes<- read.csv("/Users/Olga/Desktop/athlete_events.csv")
+```
+
+3. Subsetting dataset: selecting only necessary for the analysis columns, filtering rows which do not have medal type.
+
+```{r}
+sub_athletes<-athletes %>% 
+  select(-c(NOC,Games,Event)) %>% 
+   filter (Medal != "<NA>") 
+head(sub_athletes)
+```
+
+Genaral Analysis
+
+a) What counties have the biggest number of medals over the whole olympic history?
+
+```{r}
+total_winners<-sub_athletes %>% 
+  filter (Medal != "<NA>") %>% 
+   group_by(Team) %>% 
+   count(Medal) %>% 
+  mutate(sum_n = sum(n)) %>% 
+  select(Team,sum_n) %>% 
+  slice(1) %>% 
+  arrange(desc(sum_n)) 
+
+total_winners 
+
+```
+
+b) What kind of sport and what countries have the largest number of gold medals over the whole olympic history?
+
+```{r}
+sport_winners<-sub_athletes %>% 
+  filter(Medal=="Gold") %>% 
+  group_by(Sport,Team) %>% 
+  count(Medal) %>%
+  arrange(desc(n))
+
+head(sport_winners)
+tail(sport_winners)
+
+```
+
+
+c) What country has the highest number of gold medals by each Olympic games.
+
+```{r}
+winner_by_year<-sub_athletes %>%
+  filter(Medal =="Gold") %>%
+  select(Year,Team,Medal) %>% 
+  group_by(Year,Team) %>% 
+  count(Medal) %>%
+  group_by(Year) %>% 
+  arrange(Year,desc(n)) %>% 
+  slice(1)
+ 
+head(winner_by_year)
+
+```
+
+d) What country appear most often across all Olympic games history as a gold medal winner?
+
+```{r}
+absolute_leader<-winner_by_year %>% 
+  group_by(Team) %>% 
+  count(Team) %>% 
+  arrange(desc(nn))
+  
+absolute_leader
+```
+
+e) Any correlation between kind of sports and height?
+
+```{r}
+height_sport<-sub_athletes %>% 
+  filter (Height != "<NA>") %>% 
+  group_by(Sport) %>% 
+  summarise(avg_height=mean(Height)) %>% 
+  arrange(desc(avg_height))
+
+head(height_sport)
+tail(height_sport)
+
+```
+
+f) Any correlation between kind of sports and weight?
+
+```{r}
+Weight_sport<-sub_athletes %>% 
+  filter (Weight != "<NA>") %>% 
+  group_by(Sport) %>% 
+  summarise(avg_Weight=mean(Weight)) %>% 
+  arrange(desc(avg_Weight))
+
+head(Weight_sport)
+tail(Weight_sport)
+
+```
+
