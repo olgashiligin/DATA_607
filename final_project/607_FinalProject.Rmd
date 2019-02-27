@@ -1,0 +1,577 @@
+---
+title: "Final Project"
+author: "Olga Shiligin"
+date: "08/12/2018"
+output: html_document
+---
+
+Innovations Of Top 10 Technology Companies
+-------------------------------------------
+
+Introduction
+-------------
+
+We all know that patents is one of the forces driving progress, I was curious how leading tech companies perform in this field. Do they innovate a lot? How innovations rate fluctuates? What is the most popular category of innovation? What are global innovation trends?
+
+
+Goal
+----
+For my final project I will perform a study analysis of the patent registration data of the top 10 Technology Companies in the world trying to find answers to the following questions:
+
+- what is the overall innovation trend of top 10 tech companies?
+- how many patents tech companies register during their entire history, who is at the top of this list?
+- how do companies' main innovation categories change over time?
+- what are the area of main focus for innovation of each company?
+
+
+Data Sources
+------------
+
+1. Patents registration data is taken from US Patents And Trademark Office website: https://www.uspto.gov/patents-application-process/search-patents
+2. Patents US class classification: https://www.uspto.gov/web/patents/classification/selectnumwithtitle.htm
+3. Top 10 Top 10 Technology Companies (2018): https://www.investopedia.com/articles/markets/030816/worlds-top-10-technology-companies-aapl-googl.asp
+
+
+Limitations and assumptions:
+----------------------------
+
+1. The defenition of a ‘digital tech business’ is a business that provides a digital technical service/product/platform/hardware, or heavily relies on it, as its primary revenue source. 
+As the majority of medium to large companies use and heavily rely on technology. I would consider company as a Technology Company if it is in the business of SELLING technology. For the purpose of the project I took the list top 10 Technology Companies by Investopedia list.
+
+https://www.investopedia.com/articles/markets/030816/worlds-top-10-technology-companies-aapl-googl.asp
+
+- Apple (Market value: $995.50 billion)
+- Samsung (Market value: $765.26 billion)
+- Microsoft (Market value: $855.4 billion)
+- Google (Alphabet) (Market value: $756.85 billion)
+- Intel (Market value: $220.33 billion)
+- IBM (Market value: $112.47 billion)
+- Facebook (Market value: $434.66 billion)
+- Hon Hai Precision (Market cap: $6023.96 billion)
+- Tencent (Market value: $356.11 billion)
+- Oracle (Market value: $190.38 billion)
+
+2. IMPORTANT: As patent registrtration process takes up to 2 years to be fully registred in US Patents And Trademark Office, The data for the last 2 years is ignored in my analysis.
+
+
+Technical project overview
+---------------------------
+
+1. Scraping patent registration data for the whole company history. Python language was used for data scraping.
+ 
+ Example of web page where data was scraped:
+ 
+http://patft.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&Sect2=HITOFF&p=1&u=%2Fnetahtml%2FPTO%2Fsearch-bool.html&r=37&f=G&l=50&co1=AND&d=PTXT&s1=Apple.ASNM.&OS=AN/Apple&RS=AN/Apple
+
+The following data was scraped for each company:
+
+- United States Patent Number
+
+- Date Field
+
+- Current U.S. Class
+
+- Patent title
+
+- Assignee name
+
+- link
+
+2. Data Transformation: change initial data structure to data structure that is suitable and ready to use in relational database. Python language was used to change data structure.
+
+ - current U.S. Class was splitted into 2 columns (before and after slash): us_category and us_subcategory. Only us_category was used in the analysis.
+ - year was extracted from data column
+ - companies name was added ("author" column)
+ - only top 4 columns of scraped data will be used for my analysis (patent_number, date, us_cat, title)
+ 
+3. Saving data to csv files. Python language was used to save data in csv files.
+
+4. Importing csv file to MySql database. R language was used for the importing.
+
+5. Reading data from MySql database. R language and SQL language was used for reading data from database.
+
+6. Performing analysis. (R language)
+
+
+Data Collection Statistics Overview:
+------------------------------------
+
+Time period: 1968 till present
+
+Number of patents regestred: 353683
+
+Number of categories: 436
+
+Number of companies analysed: 10
+
+
+Note: Data Collection and Transformation Script is written in Python and presented in GitHub. The rest script is presented below.
+
+
+
+```{r}
+library("stringr")
+library("dplyr")
+library("tidyr")
+library("RMySQL")
+library(DBI)
+library("ggplot2")
+#install.packages("sqldf")
+#library("sqldf")
+library(plyr)
+library(wordcloud)
+
+#declare some constants
+data.dir = "/Users/Olga/Desktop/PycharmProjects/r/data/"
+input.files.dir = paste0(data.dir,"patents/")
+classification.path = paste0(data.dir,"classification_csv.csv")
+suffix = "_us_csv.csv"
+
+#function for connecting to MySQL database
+create.connection <- function(){
+  connection <- dbConnect(MySQL(),
+                          user="root", password="olga1234",
+                          dbname="patents", host="localhost")
+}
+
+#function for creating table in db
+create.table <- function(connection, schema, table){
+  create.table.query = paste0("CREATE TABLE ",schema,".",table,"
+                              (
+                              author        varchar(100)  not null,
+                              patent_number varchar(20)   not null,
+                              date          varchar(20)   null,
+                              year          varchar(20)   null,
+                              us_cat        varchar(200)  null,
+                              us_subcat     varchar(200)  null,
+                              description   varchar(1000) null,
+                              title         varchar(1000) null
+                              )"
+                         )
+  created.table <- dbSendStatement(connection, create.table.query)
+  dbClearResult(created.table)
+}
+#function for dropping db table
+drop.table <- function(connection, schema, table){
+  drop.table.query = paste0("DROP TABLE IF EXISTS ",schema,".",table)
+  drop.table <- dbSendStatement(connection, drop.table.query)
+  dbClearResult(drop.table)
+}
+
+read.db <- function(table){
+  connection <- create.connection()
+  query <- paste0("SELECT * FROM ",table)
+  results <- dbGetQuery(connection,query)
+  results
+}
+#function for escaping single quote
+clense <- function(val){
+  gsub("'", "''",toString(val))
+}
+
+#function for saving multiple records to db in a single transactopn
+save.to.db <- function(connection,patents.df,author){
+  for (row in 1:nrow(patents.df)) {
+    patent.number <- clense(patents.df[row, "patent_number"])
+    date  <- clense(patents.df[row, "date"])
+    year  <- clense(patents.df[row, "year"])
+    us_cat <- clense(patents.df[row,"us_cat"])
+    us_subcat <- clense(patents.df[row,"us_subcat"])
+    title <- clense(patents.df[row,"title"])
+    description <- clense(patents.df[row,"description"])
+    insert.query = paste("INSERT INTO patents.PATENTS VALUES ( '",author,"','",patent.number,"', '",date,"', '",year,"', '",us_cat,"', '",us_subcat,"', '",description,"', '",title ,"')",sep="")
+    insert.row <-  dbSendStatement(connection, insert.query)
+    dbClearResult(insert.row)
+  }
+}
+# function for reading csv
+read_csv <- function(path,connection){
+  tryCatch({read.csv(file=path, fileEncoding ="cp1251", header=TRUE, quote = "\"", sep=",",stringsAsFactors=FALSE)}
+           , error = function(e) {
+             print(paste0("following file causing error: ",path))
+             print(e)
+             dbDisconnect(connection)
+             stop(e)
+           })
+}
+#this function does all the work with help of all functions declared above
+saveall <- function(){
+  connection <- create.connection()
+  pattern = paste0(suffix,"$")
+  files.list <- list.files(input.files.dir,pattern = pattern)
+  classification.df = read_csv(classification.path, connection)
+  #colnames(classification.df)[1] <- "cat"
+  for (path in files.list){
+    absolute.path = paste0(input.files.dir,"/",path)
+    data.df <- read_csv(absolute.path, connection)
+    df <-  left_join(data.df, classification.df, by = c('us_cat'))
+    author = tolower(str_replace(path, suffix,"")[[1]][1])
+    tryCatch({save.to.db(connection, df,author)}
+             , error = function(e) {
+               print(paste0("following file causing error: ",path))
+               print(e)
+               dbDisconnect(connection)
+               stop(e)
+             }
+    )
+  }
+}
+
+#saveall()
+```
+
+
+Analysis
+--------
+
+```{r}
+connection <- create.connection()
+query<- "SELECT * from patents.PATENTS"
+results <- dbGetQuery(connection,query)
+dbDisconnect(connection)
+```
+
+General innovation pace overview by companies by year
+------------------------------------------------------
+
+```{r}
+df<-results %>% 
+  select (author, year, patent_number) %>% 
+  group_by(author, year) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number))
+```
+
+
+```{r}
+df$year<- as.numeric(as.character(df$year))
+overall<-ggplot(data = df, aes(x=year, y = patent_count, color = author)) +
+         geom_line()+ theme(axis.text.x = element_text(angle = 90, hjust =1))+scale_color_brewer(palette="Spectral")+
+         ggtitle ("Number Of Registered Patents By Company By Year") + xlab("year") + ylab("number of patents")
+overall
+```
+
+Noticable leaders of innovations among top 10 companies are IBM and Samsung. 
+
+Intel and Microsoft have steady decreasing pace in patent registrations.
+
+Facebook and Tencent innovate least of all companies.
+
+Google has a sharp increase in patent registration since 2010 and demonstrate good innovation potential.
+
+
+Aggregated innovation pace overview by year (all 10 companies)
+--------------------------------------------------------------
+
+```{r}
+df1<-results %>% 
+  select (year, patent_number) %>% 
+  group_by(year) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number))
+```
+
+
+```{r}
+df1$year<- as.numeric(as.character(df1$year))
+overall_agg<-ggplot()+
+  geom_line(data = df1, aes(x = year, y = patent_count), color = "blue") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle ("Number Of Registered Patents By Year (top 10 tech companies)") + xlab("year") + ylab("number of patents")
+overall_agg
+```
+
+Graph shows that sharp increase in innovation pace starts from 1990. 
+
+Most likely following crises affected innovation pace of top 10 tech companies:
+
+- dot-com bubble crisis slowed the pace a bit, but after that steady growth have being continued.
+
+- Economic crisis 2007-2008 significantly negatively affected the innovation pace and only in 2012 innovation pace exceed the pace of pre crisis pace.
+
+
+What do tech companies innovate most (top 20 most popular patent categories)?
+-----------------------------------------------------------------------------
+
+```{r}
+df2<-results %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=20)
+```
+
+
+```{r}
+popular_title<-ggplot(df2, aes(x=reorder(description,-patent_count), y=patent_count)) +
+  geom_bar(stat="identity")+theme_minimal() +
+  geom_col(aes(fill = patent_count)) + 
+  scale_fill_gradient2(low = "white", high = "blue") + 
+  coord_flip() + 
+  theme(text = element_text(size=6))+
+  ggtitle ("The most popular patents of all time among top 10 tech companies") + xlab("Total Count") + ylab("Patent Group Name")
+
+popular_title
+```
+
+If I ignore Miscellaneous category as it tells a litle about patent nature, the leading patent categories are active solid-atate devices; data processing: database and file management; electrical computers and digital processing systems.
+
+
+Evolution Of Innovations Of Top 10 companies (from 1968 till present)
+--------------------------------------------------------------------
+
+In order to admit any changes in innovation trend over time, I will look at the leading innovation categories of the following periods:
+
+- before 1990 year
+
+- from 1990 till 2000
+
+- from 2000 till 2010
+
+- 2010 till present
+
+Leading innovation categories before 1990 year
+----------------------------------------------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df3<-results %>% 
+  filter (year<1990) %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df3)
+```
+
+Leading innovation categories from 1990 till 2000
+--------------------------------------------------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df4<-results %>% 
+  filter(between(year,1990,2000)) %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df4)
+```
+
+Leading innovation categories from 2000 till 2010
+--------------------------------------------------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df5<-results %>% 
+  filter(between(year, 2000 , 2010 )) %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df5)
+```
+
+Leading innovation categories from 2010 till 2018
+--------------------------------------------------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df6<-results %>% 
+  filter(between(year, 2010 , 2018 )) %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df6)
+```
+
+Main innovation categories change over time, but "Active solid state devices" is the leading patent category across all periods.
+Also the "evolution" of data related leading patent categories is the following: starting from data/information storage before 90th, then data processing: database and file management (1990-2020) to Recording, communication, or information retrieval equipment and image processing (from 2010 till present).
+
+
+Leading innovation categories by companies
+------------------------------------------
+
+Apple
+-----
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df7<-results %>% 
+  filter(author =="apple") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df7)
+```
+
+
+Facebook
+--------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df8<-results %>% 
+  filter(author =="facebook") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df8)
+```
+
+Google
+-------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df9<-results %>% 
+  filter(author =="google") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df9)
+```
+
+IBM
+---
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df10<-results %>% 
+  filter(author =="ibm") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df10)
+```
+
+Samsung
+-------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df11<-results %>% 
+  filter(author =="samsung") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df11)
+```
+
+Intel
+-----
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df12<-results %>% 
+  filter(author =="intel") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df12)
+```
+
+Tencent
+-------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df13<-results %>% 
+  filter(author =="tencent") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df13)
+```
+
+Oracle
+------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df14<-results %>% 
+  filter(author =="oracle") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df14)
+```
+
+Hon Hai Precision
+-----------------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df15<-results %>% 
+  filter(author =="hon_hai") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df15)
+```
+
+Microsoft
+---------
+
+```{r}
+results$year<- as.numeric(as.character(results$year))
+df16<-results %>% 
+  filter(author =="microsoft") %>% 
+  select (description,patent_number) %>% 
+  group_by(description) %>% 
+  dplyr::summarise(patent_count = n_distinct(patent_number)) %>% 
+  arrange(desc(patent_count)) %>% 
+  top_n(n=10)
+head(df16)
+```
+
+Conclusions
+-----------
+
+- Samsung, IBM and Microsoft are innovation leaders among top 10 tech companies selected for the purpose of this project.
+
+- Intel and Microsoft have noticeable decrease in thier innovation pace, where as google demonstrate steady increasing innovation pace.
+
+- General innovation pace of all 10 companies clearly show "innovation boom" after 1990.
+
+- General innovation trend of top 10 tech companies reflects dot-com crisis as well as financial crisis 2007-2008 with significant down in patent registrations during crisis time.
+
+- Main innovation categories change over time, but "Active solid state devices" is the leading patent category across all periods.
+Also the "evolution" of data related leading patent categories is the following: starting from data/information storage before 90th, then data processing: database and file management (1990-2020) to Recording, communication, or information retrieval equipment and image processing (from 2010 till present).
+
+- Innovation direction of tech companies reflects the specific of their businesses:
+    
+    - Apple, Tencent focus on Recording, communication, or information retrieval equipment
+    - Facebook apart from data processing contribute to information security
+    - Google is also focued on data processing and contribute to image analysis
+    - Samsung, IBM and Intel mostly innovate in hardware
+    - Hon Hai Precision innovate in electrical system and devices and in energy transformation equipment.
+    - Microsoft and Oracle - digital processing systems and data processing.
+
+
+
+
+
+
