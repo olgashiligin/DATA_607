@@ -1,0 +1,24 @@
+
+<table>
+	<book id = "1">
+		<title>Jamie Cooks Italy</title>
+		<author>Jamie Oliver</author>
+		<price>9.99</price>
+		<isbn>0718187733</isbn>
+		<pages>408</pages>
+	</book>
+	<book id = "2">
+		<title>Mary Berry's Complete Cookbook: Over 650 recipes</title>
+		<author>Marry Berry</author>
+		<price>21.00</price>
+		<isbn>0241286123</isbn>
+		<pages>608</pages>
+	</book>
+	<book id = "3">
+  <title>Great British Bake Off: Everyday: Over 100 Foolproof Bakes</title>
+  <author>Linda Collister, Marry Berry</author>
+  <price>18.17</price>
+  <isbn>9781849906081</isbn>
+  <pages>320</pages>
+	</book>
+</table>
