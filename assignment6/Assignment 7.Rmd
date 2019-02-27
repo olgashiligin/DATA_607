@@ -1,0 +1,52 @@
+---
+title: "XML, JSON and HTML"
+author: "Olga Shiligin"
+date: "14/10/2018"
+output: html_document
+---
+
+Pick three of your favorite books on one of your favorite subjects. At least one of the books should have more than one author. For each book, include the title, authors, and two or three other attributes that you find interesting.
+Take the information that you’ve selected about these three books, and separately create three files which store the book’s information in HTML (using an html table), XML, and JSON formats (e.g. “books.html”, “books.xml”, and “books.json”). To help you better understand the different file structures, I’d prefer that you create each of these files “by hand” unless you’re already very comfortable with the file formats.
+Write R code, using your packages of choice, to load the information from each of the three sources into separate R data frames. Are the three data frames identical?
+
+
+Loading necessary packages
+```{r}
+# install.packages("XML", dependencies=TRUE)
+library(knitr)
+library(XML)
+library(RCurl)
+library(jsonlite)
+```
+
+Loading and reading HTML file
+
+```{r}
+url<-"https://raw.githubusercontent.com/olgashiligin/607_assignments/master/books.html"
+html_file <- getURL(url)
+html_file
+
+html_table <- readHTMLTable(html_file, header=TRUE, which=1)
+html_table
+```
+
+Loading and reading XML file
+
+```{r}
+url2<-("https://raw.githubusercontent.com/olgashiligin/607_assignments/master/books.xml")
+xml_file<-getURL(url2)
+
+xml_table <- xmlToDataFrame(xml_file)
+xml_table
+```
+
+Loading and reading JSON file
+
+```{r}
+url3<-"https://raw.githubusercontent.com/olgashiligin/607_assignments/master/books.json"
+json_file <- fromJSON(url3)
+json_file
+```
+
+All three data frames look identical.
+
