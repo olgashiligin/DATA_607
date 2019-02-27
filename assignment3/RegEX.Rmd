@@ -1,0 +1,93 @@
+---
+title: "RegEx"
+author: "Olga Shiligin"
+date: "16 September 2018"
+output: html_document
+---
+
+```{r}
+library(stringr)
+raw.data <- "555-1239Moe Szyslak(636) 555-0113Burns, C. Montgomery555-6542Rev. Timothy Lovejoy555 8904Ned Flanders636-555-3226Simpson, Homer5543642Dr. Julius Hibbert"
+names<- unlist(str_extract_all(raw.data, "[[:alpha:]., ]{2,}"))
+names
+```
+(a) Use the tools of this chapter to rearrange the vector so that all elements conform to
+the standard first_name last_name.
+ 2 steps:
+ - remove titles/middle name;
+ - change first/last name position with "," inside.
+ 
+```{r}
+title_free<- str_trim(sub("[[:alpha:]]{1,3}\\.","",names)) 
+first_last<- str_replace(title_free,"(\\w+),\\s+(\\w+)","\\2 \\1")
+first_last
+```
+
+(b) Construct a logical vector indicating whether a character has a title (i.e., Rev. and
+Dr.)
+
+```{r}
+has_title <- str_detect(names, "^[:alpha:]{2,3}\\.") 
+title<-data.frame (names, title=has_title)
+title
+```
+
+(c) Construct a logical vector indicating whether a character has a second name.
+
+```{r}
+second_name <- str_detect(names, " [:alpha:]\\.") 
+second_name<-data.frame (names, second_name=second_name)
+second_name
+```
+
+4. Describe the types of strings that conform to the following regular expressions and
+construct an example that is matched by the regular expression.
+
+(a) [0-9]+\\$ 
+Any numbers or span of numbers from 0 to 9 followed by a $
+
+```{r}
+str_detect ("839503$", "[0-9]+\\$")
+str_detect ("3$", "[0-9]+\\$")
+```
+
+(b) \\b[a-z]{1,4}\\b
+Words that are constructed from 1 to 4 letters (lower case) surrounded by the word edge.
+
+```{r}
+str_detect("buzz","\\b[a-z]{1,4}\\b")
+str_detect("z","\\b[a-z]{1,4}\\b")
+```
+
+(c) .*?\\.txt$
+It can be anything that ends with .txt
+
+```{r}
+str_detect(".txt",".*?\\.txt$")
+str_detect("jslfn375hfv .txt",".*?\\.txt$")
+str_detect(" .txt",".*?\\.txt$")
+```
+
+d) \\d{2}/\\d{2}/\\d{4}
+Date format dd/mm/yyyy
+
+```{r}
+str_detect("13/09/2018","\\d{2}/\\d{2}/\\d{4}")
+```
+
+(e) <(.+?)>.+?</\\1>
+ HTML tag
+ 
+```{r}
+ str_detect("<<td>Defines the document type</td>>","<(.+?)>.+?</\\1>")
+```
+ 
+9. The following code hides a secret message.
+
+```{r}
+secret<- ("clcopCow1zmstc0d87wnkig7OvdicpNuggvhryn92Gjuwczi8hqrfpRxs5Aj5dwpn0Tanwo Uwisdij7Lj8kpf03AT5Idr3coc0bt7yczjatOaootj55t3Nj3ne6c4Sfek.r1w1YwwojigO d6vrfUrbz2.2bkAnbhzgv4R9i05zEcrop.wAgnb.SqoU65fPa1otfb7wEm24k6t3sR9zqe5 fy89n6.Nd5t9kc4fE905gmc4Rgxo5nhDk!gr")
+secret <- unlist(str_extract_all(secret, "[[:upper:].?]{1,}"))
+message <- str_replace_all(paste(secret, collapse = ''), "[.]", " ")
+message
+```
+
