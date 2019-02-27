@@ -1,0 +1,161 @@
+---
+title: "Project2_Child_Death_data"
+author: "Olga Shiligin"
+date: "07/10/2018"
+output: html_document
+---
+
+Data Source: http://www.childmortality.org/
+
+Data Set:“Estimates for under-five, infant and neonatal mortality”
+
+The dataset contains six value variables of interest: under-five (0-4 years) mortality, infant (0-1 years) mortality, neonatal (0-1 month) mortality, as well as the number of under-five, infant, and neonatal deaths. 
+
+
+1. Installing necessary packages
+
+```{r}
+# install.packages("tidyr")
+# install.packages("dplyr")
+# install.packages("ggplot2")
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+```
+
+2. Reading csv file
+
+```{r}
+death_rate<- read.csv("https://raw.githubusercontent.com/olgashiligin/project2_607/master/Child_Death_Rate.csv")
+
+```
+3. Performing data transformation:
+
+- changing wide structure to long
+
+- splitting year_type column into year and type columns
+
+- filtering data for the last 20 years with Uncertainty bound = "Median"
+
+- selecting necessary columns
+
+```{r}
+median_bound<-death_rate%>% 
+  gather(year_type, value, U5MR.1950:Neonatal.Deaths.2015) %>%
+  mutate(year = sub('.*\\.', '',year_type), type = sub('\\.\\d{4}', '', year_type)) %>%
+  filter(Uncertainty.bounds. == "Median"& year>=1998) %>% 
+  select(-c(year_type,Uncertainty.bounds.))
+head(median_bound)
+
+```
+  
+Overall analysis
+-------------------------------
+```{r}
+stats<-median_bound %>% 
+  group_by(type) %>% 
+  summarise(avg_value = mean(value))
+
+head(stats)
+
+```
+
+ For the last 20 years Death Under Five group has the highest average MR - 45, whereas the lowest MR has group Neonatal.Deaths - 17.
+
+
+What country has the highest and the lowest under-five MR?
+
+```{r}
+U5MR<-median_bound %>% 
+  filter(type=="U5MR") %>% 
+  arrange(desc(value))
+
+head(U5MR)
+tail(U5MR)
+
+```
+
+What countries have the highest and the lowest IMR?
+
+```{r}
+IMR<-median_bound %>% 
+  filter(type=="IMR") %>% 
+  arrange(desc(value))
+
+head(IMR)
+tail(IMR)
+
+```
+
+What countries have the highest and the lowest NMR?
+
+```{r}
+NMR<-median_bound %>% 
+  filter(type=="NMR") %>% 
+  arrange(desc(value))
+
+head(NMR)
+tail(NMR)
+
+```
+
+
+What year have 3 types of child death had the highest number in?
+
+```{r}
+stats_by_year<-median_bound %>% 
+  group_by(type, year) %>% 
+  summarise(avg_value = mean(value)) %>%
+  group_by(type, year) %>% 
+  summarise(max_avg_value = max(avg_value)) %>% 
+  arrange(year,desc(max_avg_value)) %>% 
+  slice(1)
+  
+stats_by_year
+
+```
+
+As we see 1988 was the worst year in terms of child death among all 3 groups of child death for the last 20 years.
+
+
+Let's pick 3 countrise, one from developed countries (United Kingdom), one from economies in transition (Belarus) and one from undeveloped (Angola) counrties in order to compare child death rates (Classifucation was taken from United Nations Country Classification).
+
+
+United Kingdom
+
+```{r}
+GB<-median_bound %>% 
+  filter(CountryName=="United Kingdom") %>% 
+  group_by(type) %>% 
+  summarise(avg_value = mean(value))
+
+GB
+```
+
+Belarus
+
+```{r}
+Belarus<-median_bound %>% 
+  filter(CountryName=="Belarus") %>% 
+  group_by(type) %>% 
+  summarise(avg_value = mean(value))
+
+Belarus
+```
+
+
+Angola
+
+```{r}
+Angola<-median_bound %>% 
+  filter(CountryName=="Angola") %>% 
+  group_by(type) %>% 
+  summarise(avg_value = mean(value))
+
+Angola
+```
+
+Results are quite expected and show negative correlation between child mortality variables and country's economic development. (Ignore absolute death numbers).
+
+
