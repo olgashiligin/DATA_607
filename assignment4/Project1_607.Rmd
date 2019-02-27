@@ -1,0 +1,120 @@
+---
+title: "607_Project1"
+author: "Olga Shiligin"
+date: "23/09/2018"
+output: html_document
+---
+
+Task
+----
+The purpose of the project is to process a text file of chess tournament results and generate a csv file (that could for example be imported into a SQL database) with the following information for all of the players:
+
+Player’s Name, Player’s State, Total Number of Points, Player’s Pre-Rating, and Average Pre Chess Rating of Opponents
+
+Solution
+----------
+
+"stringr" package is required for the project
+
+Reading table using read.table function. One extra column (empty) was created because "|" is treated as the beginning of the next column. We can delete the empty column.
+
+```{r}
+library(stringr)
+column_names <- c("ID", "Player_Name", "Total_Ptc", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "Empty")
+chess_results <- read.table("https://raw.githubusercontent.com/olgashiligin/Chess-Tournament/master/Raw%20Data", header = FALSE, sep = "|", col.names = column_names, skip = 4, fill = TRUE, stringsAsFactors = FALSE)
+chess_results <- subset(chess_results,select = c(1:10))
+head(chess_results,5)
+```
+
+```{r}
+is.data.frame(chess_results)
+```
+
+Now we have to remove empty spaces across all the table.
+
+```{r}
+for (row in 1:nrow(chess_results)) {
+  for(col in 1:10) {
+    chess_results[row,col] <- str_trim(chess_results[row,col])
+  }
+}
+```
+
+Creating State and Pre_Score columns
+
+```{r}
+for (row in 1:nrow(chess_results)) {
+  chess_results$State[row] <- chess_results$ID[row+1]
+  chess_results$Pre_Score[row] <- str_extract(chess_results$Player_Name[row+1], "[:space:]{1}\\d{3,4}")
+}
+
+chess_results <- subset(chess_results, !is.na(chess_results$Pre_Score))
+
+head(chess_results,5)
+
+```
+
+The following steps to be taken in order to calculate opponent's average pre rating.
+
+1. Removing letters (W, L, D) from R1 to R7 columns (we do not need these letters in our project)
+2. Replacing opponent's ID in Rs columns with opponent's pre rating.
+3. Calculating opponent's average pre rating.
+
+Removing letters:
+
+```{r}
+for (col in 4:10) {
+  chess_results[, col] <- str_extract(chess_results[, col], "\\d+")
+}
+
+head(chess_results,5)
+```
+
+Replacing opponent's ID in Rs columns with opponent's pre rating.
+
+```{r}
+for (row in 1:nrow(chess_results)) {
+  for(col in 4:10) {
+    filter<-chess_results$ID == chess_results[row,col]
+    chess_results[row,col] <- chess_results[filter,12][1]
+  }
+}
+
+head(chess_results,5)
+
+```
+
+Calculating opponent's average pre rating.
+Checking data frame structure first.
+
+```{r}
+str(chess_results)
+```
+
+Changing data type for Rounds in order to calculate Average pre rating for opponets.
+
+```{r}
+for (col in 4:10) {
+  chess_results[, col] <- as.numeric(chess_results[, col])
+}
+```
+
+Ceating new column Opponents_Rating
+https://stackoverflow.com/questions/33981527/compute-the-mean-of-two-columns-in-a-dataframe
+
+```{r}
+chess_results$Opponent <- round(rowMeans(chess_results[, c(4:10)], na.rm = TRUE), 0)
+```
+
+Final Data Frame
+
+```{r}
+chess_results <- subset(chess_results,select = c(1,2,3,11,12,13))
+head(chess_results,5)
+```
+
+Saving Results to CSV file
+
+```{r}
+write.csv(chess_results, "chess_results.csv", row.names=FALSE)
+```
