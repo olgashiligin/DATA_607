@@ -1,0 +1,351 @@
+---
+title: "Project3_DataScienceSkills"
+author: "Olga Shiligin"
+date: "19/10/2018"
+output: html_document
+---
+
+
+Introduction
+-------------
+
+The purpose of the project is to answer the question: "Which are the most valued data science skills?". As this is exploratory work, fairly open ended, and does not pretend to give a "right answer". All conclusions are subjective as multiple approaches can be taken.
+
+In order to answer the question I took data from different sourses and perspectives: employer's (job website), employee's (idustry wide survey), also I found ready research on that topic.
+
+ 1. Job board website (employer's perspective). To examine job search which can indicate "in demand skills" for Data Science positions. CWjobs.co.uk. (UK job board) was taken for that purpose. 
+ 
+ 2. Survey (employee's perspective). Kaggle website conducted an industry-wide survey to establish a comprehensive view on the state of data science and machine learning. The survey received over 16,000 responses from 171 countries and territories and contains a lot information about the most valuable data science skills.
+ 
+Data is presented in csv file, source: https://www.kaggle.com/rayjohnsoncomedy/job-skills/data
+ 
+ 3. Ready to use analysis from Web (analyst/market experts' view). 
+ 
+ The are a lot of researches on what is the most valuable Data Science skills. I will look at one of them.
+
+Assumptions:
+--------------
+This project provides general view on the most valued Data Science skills. In this project I ignore the fact that skills vary among projects and types of Data Science jobs. 
+
+Job board website: scrape the data.
+------------------------------------ 
+ https://www.cwjobs.co.uk/jobs/data-scientist?s=header
+ 
+The idea here is to scrape the web pages one by one (with a search criteria - "Data Scientist") and count of a pre-defined set of keywords found within the jod description text. The result of the count is going to detect skills the most demanded by employers. 
+ 
+ Loading nessesary packages
+ 
+```{r}
+library(rvest)
+library("rjson")
+library("stringi")
+vignette("selectorgadget")
+library("dplyr")
+library("tidyr")
+library("RMySQL")
+library("DBI")
+library("ggplot2")
+```
+
+Scraping CW jobs website steps:
+
+ - extract links to job description pages by iterating search results 
+
+- iterating through links obtained in prvious step extract job description from each page and count number of matches of each skill from list read from file
+
+- create DataFrame of following format: skill, jobref, count
+
+- save data to MySQL database
+
+- retrieved those records from DB into DataFrame and calculate count frequencies for each skill 
+
+
+```{r}
+get.jobs.df <- function(pages_count){
+  res <- data.frame()
+  for(i in 1:pages_count){
+    links <- tryCatch({
+               get.page.links(i)
+            },error=function(cond){
+                  message(cond)
+                  print(paste("Oops! Error for links on page: ",toString(i), " pages_count: ",toString(pages_count)))
+                  list()
+            }
+            )
+     
+     for (link in links){
+          jobs.df <- tryCatch({get.job.descriptions(link)},
+                        error = function(cond){
+                            message(cond)
+                            print(paste("Oops! Error for link:",link))
+                            data.frame()
+                        })
+           res <- rbind(res,jobs.df)
+    }   
+  } 
+  return(res)
+}
+
+# returns list of links to job description pages on given search page
+get.page.links <- function(page_number){
+                            pagination <- if(page_number>1) {paste('&page=',toString(page_number),sep="")} else {''}
+                                    
+                            html <- read_html(paste("https://www.cwjobs.co.uk/jobs/data-scientist?s=header",pagination,sep=""))
+                            links <- html %>% html_nodes(".job-title") %>% html_nodes("a") %>% html_attr("href")
+                            # relevant_links(unlist(Filter(is.job.relevant, links)))
+                            
+                            return( links )
+}
+# get job description dataframe. Format: columns: jobref,job description
+get.job.descriptions <- function(link){
+                                    temp.text <- read_html(link)
+                                    temp.text.result <- temp.text %>% html_nodes(".job-description") %>% html_text()
+# extract job ref from the link to job description page
+                                    link.elements <- unlist(strsplit(link,"-"))
+                                    job.ref <- tail(link.elements,n=1)
+                                    df <- data.frame(jobref=job.ref, descr=temp.text.result)
+                                    return( df )
+                               }
+#  add number of matches per skill to the data frame
+get.data <- function(jobs.df){# expected format col.names=c(jobref,descr)
+  skills <- readLines("/Users/olgashiligin/Documents/skills")
+  skills.df <- data.frame(matrix(ncol = 3, nrow = 0))
+  cols <- c("skill","jobref","count")
+  colnames(skills.df) <- cols
+  for(i in 1:nrow(jobs.df)){
+    job.ref<-jobs.df[i,1]
+    job.descr <- jobs.df[i,2]
+    for (skill in skills){
+      count <- get.skill.count(job.descr,skill)
+      newrow <- data.frame(skill=skill,jobref=job.ref,count=count)
+      skills.df <- rbind(skills.df,newrow)
+    }
+  }
+  return(skills.df)
+}
+
+get.skill.count <- function(descr,skill){
+  regex <- paste('\\b',tolower(skill),'\\b',sep="")
+  count <- stri_count_regex(tolower(descr), pattern = regex)
+  return(count)
+}
+
+# jobs.df = get.jobs.df(11)
+# results.df <- get.data(jobs.df)
+# write.csv(results.df, file = "skills.csv")
+# save.to.db(df)
+```
+
+Storing results from the data frame to the relational data base.
+
+- making table in relational database
+
+- populating table with the scraping results
+
+```{r}
+save.to.db <- function(match.df){
+  connection <- dbConnect(MySQL(),
+                          user="root", password="olga123",
+                          dbname="607_assignments", host="localhost")
+  
+  drop.table.query = "DROP TABLE IF EXISTS 607_assignments.SKILL_COUNTS"
+  drop.table <- dbSendStatement(connection, drop.table.query)
+  dbClearResult(drop.table)
+  
+  create.table.query = "CREATE TABLE IF NOT EXISTS 607_assignments.SKILL_COUNTS(
+                                                                                  id INT AUTO_INCREMENT,
+                                                                                  skill VARCHAR(255) NOT NULL,
+                                                                                  jobref VARCHAR(255) NOT NULL,
+                                                                                  count INT NOT NULL,
+                                                                                  PRIMARY KEY (id)
+                                                                                  )  ENGINE=INNODB;"
+  create.table <- dbSendStatement(connection, create.table.query)
+  dbClearResult(create.table)
+  
+  for (row in 1:nrow(match.df)) {
+    skill <- match.df[row, "skill"]
+    jobref  <- match.df[row, "jobref"]
+    count  <- match.df[row, "count"]
+    
+    insert.query = paste("INSERT INTO 607_assignments.SKILL_COUNTS(skill,jobref,count) 
+                        VALUES ('",skill,"', '",jobref,"', ",toString(count)," )",sep="")
+    insert.row <-  dbSendStatement(connection, insert.query)
+    dbClearResult(insert.row)
+  }
+}
+
+```
+
+Reading and analysing results from the data base.
+
+```{r}
+conbection <- dbConnect(MySQL(),
+                 user="root", password="olga123",
+                 dbname="607_assignments", host="localhost")
+
+results <- "SELECT * from SKILL_COUNTS"
+results <- dbGetQuery(conbection, results)
+```
+
+Creating R data frame and counting number of job's descriptions scraped.
+
+```{r}
+df<-data.frame(results)
+jobs_number <- df %>% 
+  summarise(count = n_distinct(jobref))
+jobs_number            
+```
+
+Top Data Science skills most demanded by employers
+
+```{r} 
+leading_skills<- df %>% filter(count !="0") %>%
+  group_by(skill) %>% 
+  count(skill) %>%  
+  arrange(desc(n))
+leading_skills  
+```
+
+```{r} 
+
+p<-ggplot(leading_skills, aes(x=reorder(skill,-n), y=n)) +
+  geom_bar(stat="identity")+theme_minimal() +
+  geom_col(aes(fill = n)) + 
+  scale_fill_gradient2(low = "white", high = "blue") + 
+  coord_flip() + 
+  ggtitle ("Data Science Skills Most Demanded By Employers") + xlab("Total Count") + ylab("Skills")
+p
+```
+
+Graph shows that the most demanded Data Science skills are Python, SQL, machine learning and R. I would conclude that coding skills are the most searched by employers. Also I would like to note that communication skills despite of their non-technical nature have quite strong middle position in the graph.
+
+
+2. Industry-wide survey
+------------------------
+
+Using industry wide survey results the following point of Data Science skills were analysed:
+
+ - General coding skills
+ - Type of formal education
+ - Importance of formal education
+ - Coding language recommendation
+ - Machine Learning Methods
+ - Machine Learning Tools
+
+Reading survey data and filtering respondents who has Data Scientist as a job title.
+
+```{r}
+survey_data<- read.csv("responses.csv")
+sub_survey<-survey_data %>% 
+  filter (CurrentJobTitleSelect =="Data Scientist")
+```
+
+ Coding skills
+
+```{r}
+code_writer<-table(sub_survey$CodeWriter)/2433
+frame_coding<-as.data.frame(code_writer) 
+frame_coding
+```
+98% of respondents have coding skills.
+
+
+ Formal Education
+
+```{r}
+formal_edu<-table(sub_survey$FormalEducation)/2433
+frame_degree<-as.data.frame(formal_edu) %>% 
+  arrange(desc(Freq))
+frame_degree
+
+```
+
+Main type of formal education among Data Scientists is Masters degree (48%), whereas Doctoral and Bachelor's degrees' share are almost equal (24% and 21.2% respectively) and have second position in the list.
+
+ Importance of Formal Education
+
+
+```{r}
+importance_edu<-table(sub_survey$UniversityImportance)/2433
+frame_imp_edu<-as.data.frame(importance_edu) %>% 
+  arrange(desc(Freq))
+frame_imp_edu
+```
+ Half of the respondents consider formal education as important or very important.
+
+
+Coding language recommendation
+
+
+```{r}
+language<-table(sub_survey$LanguageRecommendationSelect)/2433
+frame_language<-as.data.frame(language) %>% 
+  arrange(desc(Freq))
+frame_language
+```
+
+ Python (49%) and R (19.8%) are recommended by the Data Scientists as the best programming language for Data Science.
+
+
+```{r}
+ml_method<-table(sub_survey$MLMethodNextYearSelect)/2433
+frame_ml_method<-as.data.frame(ml_method) %>% 
+  arrange(desc(Freq))
+frame_ml_method
+```
+ Deep Learning is the most popular machine learning method among Data Scientists (32,7%)
+
+```{r}
+ml_tool<-table(sub_survey$MLToolNextYearSelect)/2433
+frame_ml_tool<-as.data.frame(ml_tool) %>% 
+  arrange(desc(Freq))
+frame_ml_tool
+```
+
+TensorFlow and Spark are the most popular Machine Learning Tools among Data Scientists.
+
+3. Ready to use analysis from Web (analyst/market experts' view). 
+------------------------------------------------------------------
+
+One research, the result of which are also based on the survey, provides interesting insights on the question about most valuable data science skills in terms of prevalence of certain skills among Data Scientists.
+
+source: http://businessoverbroadway.com/investigating-data-scientists-their-skills-and-team-makeup
+
+Investigating Data Scientists, their Skills and Team Makeup article gives us analysis on the proficiency in Data Science Skills
+
+
+```{r}
+knitr::include_graphics('DS_skills.png')
+```
+
+Graph clearly shows that the most valuable skills (in terms of their rarity) are:
+
+- Cloud Management
+- Programming Skills
+- Big data and Distributed data
+- NLP
+- Programming Skills
+- Unstructured Data
+- Bayesian Stats
+
+
+Conclusions
+-----------
+
+Analysis of 3 data sources allows me to select the most valued data science skills so far:
+
+- coding skill (in particular: Python, R, SQL);
+- machine learning skills
+- skill to work with big and unstructured data
+- communication skills
+
+Further Research and Analysis
+------------------------------
+
+As this project does not pretend to be complete and exhausted, the following further research can be done: analysis of salaries and associated Data Science skills with it.
+
+
+
+
+
+
