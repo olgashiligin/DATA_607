@@ -1,0 +1,54 @@
+---
+title: "API"
+author: "Olga Shiligin"
+date: "27/10/2018"
+output: html_document
+---
+
+The New York Times web site provides a rich set of APIs, as described here: http://developer.nytimes.com/docs You’ll need to start by signing up for an API key.
+Your task is to choose one of the New York Times APIs, construct an interface in R to read in the JSON data, and transform it to an R dataframe.
+
+I have selected article search API with search query - Brexit as it is very "hot" topic in the UK now.
+
+Loading necessary library
+
+```{r}
+library(jsonlite)
+```
+
+Signing up for an API key
+
+```{r}
+api_key<-"?api-key=ec35a8674ec64bc2b24217d98784448a"
+```
+
+Setting up search criterias
+
+```{r}
+q<-"&q=brexit"
+begin_date<-"&begin_date=20180901"
+end_date<-"&end_date=20181020"
+page<-"&page="
+```
+
+Reading JSON and transforming data to R data frame
+
+```{r}
+df<-data.frame()
+ # getting 30 page (10 results per page)
+for (i in 1:30){
+  # constructing URL from search criterias
+    url <- paste0('https://api.nytimes.com/svc/search/v2/articlesearch.json',api_key,q,begin_date,end_date,page,toString(i))
+    data<-fromJSON(url,flatten = TRUE)
+    # selecting only necessary columns from JSON file
+    docs.df <- data$response$docs
+    for(k in 1:nrow(docs.df)){
+      temp_df <- data.frame(headline=docs.df[k,"headline.main"],source=docs.df[k,"source"],section=docs.df[k,"section_name"],news_description=docs.df[k,"news_desk"],document_type=docs.df[k,"document_type"])
+      df <- rbind(df,temp_df)
+    }
+    Sys.sleep(2)
+    print(paste("finished page ",i))
+}
+head(df)
+```
+
